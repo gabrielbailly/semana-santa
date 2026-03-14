@@ -513,13 +513,28 @@ export default function App() {
           </button>
         </div>
 
-        <div className="hero">
-          <h1>Trivial de Semana Santa</h1>
-          <p>Elige un nivel y responde 10 preguntas aleatorias. Todas las imágenes pueden ir juntas dentro de <strong>public/images</strong>.</p>
+        <div className="hero" style={{position:"relative"}}>
+          <div style={{position:"relative",overflow:"hidden",borderRadius:20,maxWidth:720,margin:"0 auto 20px",boxShadow:"0 12px 40px rgba(0,0,0,0.2)"}}>
+            <img 
+              src="/images/portada.png" 
+              alt="Portada Semana Santa" 
+              style={{width:"100%",display:"block",transform:"scale(1.05)",animation:"zoomHero 20s ease-in-out infinite alternate"}}
+            />
+            <div style={{position:"absolute",inset:0,background:"linear-gradient(180deg,rgba(0,0,0,0.15),rgba(0,0,0,0.45))",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,color:"white",textAlign:"center",padding:20}}>
+              <div style={{fontSize:"clamp(2rem,4vw,3rem)",fontWeight:900,letterSpacing:1}}>Trivial de Semana Santa</div>
+              <div style={{fontSize:"1rem",opacity:0.9,maxWidth:500}}>Pon a prueba tus conocimientos sobre la Pasión, Muerte y Resurrección de Jesús</div>
+              <button
+                onClick={() => document.getElementById("levels")?.scrollIntoView({behavior:"smooth"})}
+                style={{marginTop:8,background:"linear-gradient(135deg,#f59e0b,#ea580c)",border:"none",borderRadius:14,padding:"14px 26px",fontWeight:800,color:"white",cursor:"pointer",fontSize:16,boxShadow:"0 8px 20px rgba(0,0,0,0.25)"}}
+              >▶ JUGAR</button>
+            </div>
+          </div>
+          <p style={{maxWidth:700,margin:"0 auto",color:"#6b7280"}}>Elige un nivel y responde 10 preguntas aleatorias. Todas las imágenes pueden ir juntas dentro de <strong>public/images</strong>.</p>
+          <style>{`@keyframes zoomHero { from { transform: scale(1.05);} to { transform: scale(1.15);} }`}</style>
         </div>
 
         {screen === "home" && (
-          <div className="homeButtons">
+          <div id="levels" className="homeButtons">
             {Object.entries(LEVEL_LABELS).map(([key, label]) => (
               <button key={key} className="levelButton" onClick={() => startGame(key)}>
                 <span className="levelButtonTitle">{label}</span>
