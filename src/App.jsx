@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { initializeApp } from "firebase/app";
+import { addDoc, collection, getDocs, getFirestore, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
 
 const QUESTION_TIME = 7;
 
@@ -7,6 +9,19 @@ const LEVEL_LABELS = {
   medio: "Medio",
   dificil: "Difícil",
 };
+
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "semana-santa-2026.firebaseapp.com",
+  projectId: "semana-santa-2026",
+  storageBucket: "semana-santa-2026.firebasestorage.app",
+  messagingSenderId: "TU_MESSAGING_SENDER_ID",
+  appId: "TU_APP_ID",
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const scoresCollection = collection(db, "scores");
 
 const QUESTIONS = [
   { id: 1, text: "¿Qué celebración aparece en esta escena?", options: ["La Última Cena", "La Resurrección", "La Ascensión", "Pentecostés"], correctAnswer: 0, difficulty: "facil", image: "/images/1.jpg" },
@@ -134,37 +149,16 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [presentationMode, setPresentationMode] = useState(false);
   const [flash, setFlash] = useState(null);
+  const [showSavePanel, setShowSavePanel] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [savedScores, setSavedScores] = useState([]);
+  const [savingScore, setSavingScore] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
 
   const sounds = useGameSounds(soundEnabled);
   const q = questions[current];
   const progress = questions.length ? ((current + 1) / questions.length) * 100 : 0;
   const timerValue = `${(timeLeft / QUESTION_TIME) * 100}%`;
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const storedName = window.localStorage.getItem("ss_player_name") || "";
-    const storedScores = JSON.parse(window.localStorage.getItem("ss_scores") || "[]");
-    setPlayerName(storedName);
-    setSavedScores(Array.isArray(storedScores) ? storedScores : []);
-  }, []);
-
-  const saveScore = (finalScore) => {
-    if (typeof window === "undefined") return;
-    const trimmedName = playerName.trim() || "Jugador";
-    const entry = {
-      name: trimmedName,
-      score: finalScore,
-      level,
-      date: new Date().toISOString(),
-    };
-    const nextScores = [entry, ...savedScores].slice(0, 10);
-    setSavedScores(nextScores);
-    window.localStorage.setItem("ss_player_name", trimmedName);
-    window.localStorage.setItem("ss_scores", JSON.stringify(nextScores));
-    if (playerName !== trimmedName) setPlayerName(trimmedName);
-  };
 
   const medal = useMemo(() => {
     if (score >= 9) return "🥇";
@@ -172,6 +166,19 @@ export default function App() {
     if (score >= 5) return "🥉";
     return "🎖️";
   }, [score]);
+
+  useEffect(() => {
+    async function loadScores() {
+      try {
+        const snapshot = await getDocs(query(scoresCollection, orderBy("createdAt", "desc"), limit(10)));
+        const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setSavedScores(rows);
+      } catch (error) {
+        console.error("Error cargando puntuaciones:", error);
+      }
+    }
+    loadScores();
+  }, []);
 
   const startGame = (lvl) => {
     setLevel(lvl);
@@ -182,7 +189,15 @@ export default function App() {
     setScore(0);
     setTimeLeft(QUESTION_TIME);
     setFlash(null);
+    setShowSavePanel(false);
+    setSaveMessage("");
     setScreen("quiz");
+  };
+
+  const finishGame = () => {
+    sounds.final();
+    setShowSavePanel(true);
+    setScreen("results");
   };
 
   const nextQuestion = () => {
@@ -190,9 +205,7 @@ export default function App() {
     setSelected(null);
     setLocked(false);
     if (current + 1 >= questions.length) {
-      sounds.final();
-      saveScore(score);
-      setScreen("results");
+      finishGame();
       return;
     }
     setCurrent((prev) => prev + 1);
@@ -212,7 +225,35 @@ export default function App() {
       setFlash("wrong");
       sounds.error();
     }
-    setTimeout(nextQuestion, 900);
+  };
+
+  const saveScore = async () => {
+    const trimmedName = playerName.trim();
+    if (!trimmedName) {
+      setSaveMessage("Escribe un nombre para guardar la puntuación.");
+      return;
+    }
+    setSavingScore(true);
+    setSaveMessage("");
+    try {
+      await addDoc(scoresCollection, {
+        name: trimmedName,
+        score,
+        level,
+        project: "Semana Santa 2026",
+        createdAt: serverTimestamp(),
+      });
+      const snapshot = await getDocs(query(scoresCollection, orderBy("createdAt", "desc"), limit(10)));
+      const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setSavedScores(rows);
+      setShowSavePanel(false);
+      setSaveMessage("Puntuación guardada correctamente.");
+    } catch (error) {
+      console.error("Error guardando puntuación:", error);
+      setSaveMessage("No se pudo guardar en Firebase. Revisa la configuración del proyecto.");
+    } finally {
+      setSavingScore(false);
+    }
   };
 
   useEffect(() => {
@@ -220,10 +261,9 @@ export default function App() {
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
-          sounds.error();
-          setFlash("wrong");
           setLocked(true);
-          setTimeout(nextQuestion, 700);
+          setFlash("wrong");
+          sounds.error();
           return 0;
         }
         if (prev <= 3) sounds.tick();
@@ -238,24 +278,19 @@ export default function App() {
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #fff7ed; }
-        button { font: inherit; }
+        button, input { font: inherit; }
         .appShell { min-height: 100vh; padding: 16px; transition: background .25s ease; background: #fff7ed; }
         .appShell.correct { background: #ecfdf5; }
         .appShell.wrong { background: #fef2f2; }
         .topbar { max-width: 1100px; margin: 0 auto 14px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
-        .toolBtn, .levelBtn, .actionBtn { border: none; border-radius: 14px; cursor: pointer; font-weight: 700; }
+        .toolBtn, .levelBtn, .actionBtn, .nextBtn, .saveBtn { border: none; border-radius: 14px; cursor: pointer; font-weight: 700; }
         .toolBtn { background: white; padding: 12px 16px; box-shadow: 0 6px 18px rgba(0,0,0,.08); }
         .hero { max-width: 900px; margin: 24px auto; text-align: center; }
-        .heroCard { position: relative; overflow: hidden; border-radius: 22px; box-shadow: 0 14px 34px rgba(0,0,0,.18); }
-        .heroCard img { width: 100%; display: block; transform: scale(1.05); animation: zoomHero 18s ease-in-out infinite alternate; }
-        .heroOverlay { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.5)); display: flex; align-items: center; justify-content: center; flex-direction: column; color: white; padding: 20px; text-align: center; }
-        .heroOverlay h1 { margin: 0 0 10px; font-size: clamp(2rem, 4vw, 3.4rem); }
-        .heroOverlay p { margin: 0; max-width: 560px; }
-        .playBtn { margin-top: 16px; background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 24px; border: none; border-radius: 14px; font-weight: 800; cursor: pointer; }
+        .heroCard { overflow: hidden; border-radius: 22px; box-shadow: 0 14px 34px rgba(0,0,0,.18); }
+        .heroCard img { width: 100%; display: block; }
         .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
         .levelBtn { background: white; padding: 22px; box-shadow: 0 10px 24px rgba(0,0,0,.08); }
-        .levelTitle { display: block; font-size: 1.35rem; margin-bottom: 6px; }
-        .levelText { color: #6b7280; font-size: .95rem; }
+        .levelTitle { display: block; font-size: 1.35rem; }
         .quiz { max-width: 1120px; margin: 18px auto; background: white; border-radius: 24px; padding: 20px; box-shadow: 0 16px 40px rgba(0,0,0,.08); }
         .quiz.present { max-width: 1280px; padding: 28px; }
         .metaRow { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
@@ -272,6 +307,8 @@ export default function App() {
         .optionBtn { background: white; border: 2px solid #e5e7eb; border-radius: 18px; padding: 16px 18px; display: flex; gap: 14px; align-items: center; text-align: left; cursor: pointer; }
         .optionBtn:hover { border-color: #f59e0b; background: #fffbeb; }
         .optionBtn:disabled { opacity: .88; cursor: default; }
+        .optionBtn.correctAnswer { border-color: #22c55e; background: #ecfdf5; }
+        .optionBtn.wrongAnswer { border-color: #ef4444; background: #fef2f2; }
         .quiz.present .optionBtn { min-height: 92px; font-size: 1.25rem; padding: 20px; }
         .optionKey { width: 42px; height: 42px; border-radius: 999px; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; flex: 0 0 auto; }
         .quiz.present .optionKey { width: 56px; height: 56px; font-size: 1.4rem; }
@@ -285,13 +322,18 @@ export default function App() {
         .progressBar { width: 100%; height: 12px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin-top: 10px; }
         .progressFill { height: 100%; background: linear-gradient(90deg, #f59e0b, #f97316); }
         .muted { color: #6b7280; text-align: center; }
+        .feedbackPanel { margin-top: 18px; display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; border-radius: 18px; background: #f9fafb; }
+        .nextBtn, .saveBtn, .actionBtn { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 18px; }
         .results { max-width: 900px; margin: 34px auto; text-align: center; background: white; border-radius: 24px; padding: 28px; box-shadow: 0 16px 40px rgba(0,0,0,.08); }
         .results h1 { font-size: 4rem; margin: 0; }
         .results h2 { font-size: 2.2rem; margin: 8px 0; }
         .results p { color: #6b7280; }
         .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
-        .actionBtn { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 18px; }
-        @keyframes zoomHero { from { transform: scale(1.05); } to { transform: scale(1.12); } }
+        .saveCard, .scoresCard { max-width: 520px; margin: 18px auto 0; text-align: left; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; }
+        .saveRow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        .saveInput { flex: 1; min-width: 220px; padding: 12px 14px; border-radius: 12px; border: 1px solid #d1d5db; background: white; }
+        .scoreItem { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+        .scoreItem:last-child { border-bottom: none; }
         @media (max-width: 900px) {
           .levels, .quizGrid, .belowRow, .quiz.present .options { grid-template-columns: 1fr; }
           .quiz.present .optionBtn { min-height: unset; font-size: 1.05rem; }
@@ -300,13 +342,6 @@ export default function App() {
       `}</style>
 
       <div className="topbar">
-        <input
-          type="text"
-          value={playerName}
-          onChange={(e) => setPlayerName(e.target.value)}
-          placeholder="Nombre del jugador"
-          style={{ padding: "12px 14px", borderRadius: 14, border: "1px solid #d1d5db", minWidth: 220, background: "white" }}
-        />
         <button className="toolBtn" onClick={() => setSoundEnabled((v) => !v)}>{soundEnabled ? "🔊 Sonido" : "🔇 Silencio"}</button>
         <button className="toolBtn" onClick={() => setPresentationMode((v) => !v)}>{presentationMode ? "🖥️ Modo normal" : "🎥 Modo presentación"}</button>
       </div>
@@ -315,9 +350,8 @@ export default function App() {
         <div className="hero">
           <div className="heroCard">
             <img src="/images/portada.png" alt="Portada Semana Santa" />
-            </div>
-
-          <div id="levels" className="levels">
+          </div>
+          <div className="levels">
             {Object.entries(LEVEL_LABELS).map(([key, label]) => (
               <button key={key} className="levelBtn" onClick={() => startGame(key)}>
                 <span className="levelTitle">{label}</span>
@@ -346,12 +380,17 @@ export default function App() {
             <div className="questionPanel">
               <h2>{q.text}</h2>
               <div className="options">
-                {q.options.map((option, index) => (
-                  <button key={index} className="optionBtn" onClick={() => answer(index)} disabled={locked}>
-                    <span className="optionKey">{String.fromCharCode(65 + index)}</span>
-                    <span>{option}</span>
-                  </button>
-                ))}
+                {q.options.map((option, index) => {
+                  const isCorrectOption = locked && index === q.correctAnswer;
+                  const isWrongSelected = locked && selected === index && index !== q.correctAnswer;
+                  const className = `optionBtn${isCorrectOption ? " correctAnswer" : ""}${isWrongSelected ? " wrongAnswer" : ""}`;
+                  return (
+                    <button key={index} className={className} onClick={() => answer(index)} disabled={locked}>
+                      <span className="optionKey">{String.fromCharCode(65 + index)}</span>
+                      <span>{option}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -370,9 +409,22 @@ export default function App() {
               <div className="progressBar">
                 <div className="progressFill" style={{ width: `${progress}%` }} />
               </div>
-              <div className="muted" style={{ marginTop: 10 }}>Las preguntas avanzan automáticamente</div>
+              <div className="muted" style={{ marginTop: 10 }}>Las preguntas no avanzan solas. Pulsa el botón para continuar.</div>
             </div>
           </div>
+
+          {locked && (
+            <div className="feedbackPanel">
+              <div>
+                {selected === null
+                  ? `⌛ Tiempo agotado. La respuesta correcta es: ${q.options[q.correctAnswer]}`
+                  : selected === q.correctAnswer
+                    ? "✅ ¡Correcta!"
+                    : `❌ La respuesta correcta es: ${q.options[q.correctAnswer]}`}
+              </div>
+              <button className="nextBtn" onClick={nextQuestion}>{current + 1 >= questions.length ? "Ver resultado" : "Siguiente"}</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -381,20 +433,34 @@ export default function App() {
           <h1>{medal}</h1>
           <h2>{score}/10</h2>
           <p>{score >= 9 ? "¡Excelente!" : score >= 7 ? "Muy buen resultado" : score >= 5 ? "Buen trabajo" : "Puedes volver a intentarlo"}</p>
-          <p><strong>{playerName.trim() || "Jugador"}</strong></p>
-          <div style={{ maxWidth: 520, margin: "18px auto 0", textAlign: "left", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 18, padding: 16 }}>
+
+          {showSavePanel && (
+            <div className="saveCard">
+              <div style={{ fontWeight: 800 }}>Guardar puntuación</div>
+              <div style={{ color: "#6b7280", marginTop: 6 }}>Escribe el nombre del jugador para guardar los puntos en Firebase.</div>
+              <div className="saveRow">
+                <input className="saveInput" value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Nombre del jugador" />
+                <button className="saveBtn" onClick={saveScore} disabled={savingScore}>{savingScore ? "Guardando..." : "Guardar"}</button>
+              </div>
+            </div>
+          )}
+
+          {saveMessage && <p>{saveMessage}</p>}
+
+          <div className="scoresCard">
             <div style={{ fontWeight: 800, marginBottom: 10 }}>Últimas puntuaciones</div>
             {savedScores.length === 0 ? (
               <div style={{ color: "#6b7280" }}>Todavía no hay puntuaciones guardadas.</div>
             ) : (
-              savedScores.map((entry, index) => (
-                <div key={`${entry.date}-${index}`} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: index < savedScores.length - 1 ? "1px solid #e5e7eb" : "none" }}>
-                  <span><strong>{entry.name}</strong> · {LEVEL_LABELS[entry.level]}</span>
+              savedScores.map((entry) => (
+                <div key={entry.id} className="scoreItem">
+                  <span><strong>{entry.name}</strong> · {LEVEL_LABELS[entry.level] || entry.level}</span>
                   <span>{entry.score}/10</span>
                 </div>
               ))
             )}
           </div>
+
           <div className="actions">
             <button className="actionBtn" onClick={() => startGame(level)}>Jugar otra vez</button>
             <button className="actionBtn" onClick={() => setScreen("home")}>Cambiar nivel</button>
