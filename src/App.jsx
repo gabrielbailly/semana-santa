@@ -29,7 +29,6 @@ const QUESTIONS = [
   { id: 18, text: "¿Qué cerraba la entrada del sepulcro?", options: ["Una puerta", "Una gran piedra", "Un muro", "Una cortina"], correctAnswer: 1, difficulty: "facil", image: "/images/8.jpg" },
   { id: 19, text: "¿Quién aparece junto al sepulcro vacío?", options: ["Un ángel", "Un soldado", "Pedro", "Pilato"], correctAnswer: 0, difficulty: "facil", image: "/images/9.jpg" },
   { id: 20, text: "¿Quién se encuentra con Jesús resucitado?", options: ["María Magdalena", "María y Marta", "Verónica", "Salomé"], correctAnswer: 0, difficulty: "facil", image: "/images/10.jpg" },
-
   { id: 21, text: "¿Qué sacramento instituye Jesús en la Última Cena?", options: ["Bautismo", "Eucaristía", "Confirmación", "Matrimonio"], correctAnswer: 1, difficulty: "medio", image: "/images/1.jpg" },
   { id: 22, text: "¿Qué bebida comparte Jesús con sus discípulos?", options: ["Agua", "Vino", "Leche", "Aceite"], correctAnswer: 1, difficulty: "medio", image: "/images/1.jpg" },
   { id: 23, text: "¿Qué fiesta judía celebraban durante esta cena?", options: ["Pentecostés", "Pascua", "Hanukkah", "Yom Kippur"], correctAnswer: 1, difficulty: "medio", image: "/images/1.jpg" },
@@ -50,7 +49,6 @@ const QUESTIONS = [
   { id: 38, text: "¿Qué mujeres fueron al sepulcro?", options: ["María Magdalena y otras mujeres", "Solo María", "Las romanas", "Las discípulas"], correctAnswer: 0, difficulty: "medio", image: "/images/9.jpg" },
   { id: 39, text: "¿Qué día ocurrió la resurrección?", options: ["Domingo", "Viernes", "Jueves", "Sábado"], correctAnswer: 0, difficulty: "medio", image: "/images/10.jpg" },
   { id: 40, text: "¿Qué reconoce María Magdalena al ver a Jesús?", options: ["Que está vivo", "Que es un ángel", "Que es Pedro", "Que es un soldado"], correctAnswer: 0, difficulty: "medio", image: "/images/10.jpg" },
-
   { id: 41, text: "¿Qué gesto de servicio realizó Jesús durante la Última Cena?", options: ["Lavó los pies a los discípulos", "Curó a un enfermo", "Multiplicó panes", "Resucitó a Lázaro"], correctAnswer: 0, difficulty: "dificil", image: "/images/1.jpg" },
   { id: 42, text: "¿Quién traicionó a Jesús?", options: ["Judas Iscariote", "Pedro", "Juan", "Santiago"], correctAnswer: 0, difficulty: "dificil", image: "/images/1.jpg" },
   { id: 43, text: "¿Qué nuevo mandamiento dio Jesús en la Última Cena?", options: ["Amaos unos a otros", "Conquistad el mundo", "Construid templos", "Haced sacrificios"], correctAnswer: 0, difficulty: "dificil", image: "/images/1.jpg" },
@@ -75,7 +73,7 @@ const QUESTIONS = [
 
 function shuffle(array) {
   const copy = [...array];
-  for (let i = copy.length - 1; i > 0; i--) {
+  for (let i = copy.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
@@ -83,16 +81,18 @@ function shuffle(array) {
 }
 
 function pickTen(level) {
-  return shuffle(QUESTIONS.filter(q => q.difficulty === level)).slice(0, 10);
+  return shuffle(QUESTIONS.filter((q) => q.difficulty === level)).slice(0, 10);
 }
 
 function useGameSounds(enabled) {
   const ctxRef = useRef(null);
 
   const getCtx = () => {
-    if (!enabled) return null;
+    if (!enabled || typeof window === "undefined") return null;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return null;
     if (!ctxRef.current) ctxRef.current = new AudioCtx();
+    if (ctxRef.current.state === "suspended") ctxRef.current.resume();
     return ctxRef.current;
   };
 
@@ -101,22 +101,24 @@ function useGameSounds(enabled) {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-
     osc.frequency.value = freq;
+    osc.type = "triangle";
     osc.connect(gain);
     gain.connect(ctx.destination);
-
-    osc.start();
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
+    osc.start();
     osc.stop(ctx.currentTime + dur);
   };
 
   return {
-    correct: () => beep(600),
-    error: () => beep(200),
-    final: () => { beep(500); setTimeout(() => beep(700), 120); },
-    tick: () => beep(900, 0.05)
+    correct: () => beep(640, 0.12),
+    error: () => beep(220, 0.14),
+    final: () => {
+      beep(480, 0.1);
+      setTimeout(() => beep(620, 0.14), 120);
+    },
+    tick: () => beep(900, 0.04),
   };
 }
 
@@ -130,235 +132,233 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [flash, setFlash] = useState(null);
   const [presentationMode, setPresentationMode] = useState(false);
+  const [flash, setFlash] = useState(null);
 
   const sounds = useGameSounds(soundEnabled);
-
   const q = questions[current];
   const progress = questions.length ? ((current + 1) / questions.length) * 100 : 0;
-  const timerPct = `${(timeLeft / QUESTION_TIME) * 100}%`;
+  const timerValue = `${(timeLeft / QUESTION_TIME) * 100}%`;
 
-  const startGame = lvl => {
+  const medal = useMemo(() => {
+    if (score >= 9) return "🥇";
+    if (score >= 7) return "🥈";
+    if (score >= 5) return "🥉";
+    return "🎖️";
+  }, [score]);
+
+  const startGame = (lvl) => {
     setLevel(lvl);
     setQuestions(pickTen(lvl));
     setCurrent(0);
+    setSelected(null);
+    setLocked(false);
     setScore(0);
-    setScreen("quiz");
     setTimeLeft(QUESTION_TIME);
+    setFlash(null);
+    setScreen("quiz");
   };
 
-  const answer = index => {
-    if (locked) return;
-    const correct = index === q.correctAnswer;
-
-    setSelected(index);
-    setLocked(true);
-
-    if (correct) {
-      sounds.correct();
-      setFlash("correct");
-      setScore(s => s + 1);
-    } else {
-      sounds.error();
-      setFlash("wrong");
-    }
-
-    setTimeout(next, 900);
-  };
-
-  const next = () => {
+  const nextQuestion = () => {
     setFlash(null);
     setSelected(null);
     setLocked(false);
-
     if (current + 1 >= questions.length) {
       sounds.final();
       setScreen("results");
       return;
     }
-
-    setCurrent(c => c + 1);
+    setCurrent((prev) => prev + 1);
     setTimeLeft(QUESTION_TIME);
   };
 
+  const answer = (index) => {
+    if (!q || locked) return;
+    const isCorrect = index === q.correctAnswer;
+    setSelected(index);
+    setLocked(true);
+    if (isCorrect) {
+      setScore((prev) => prev + 1);
+      setFlash("correct");
+      sounds.correct();
+    } else {
+      setFlash("wrong");
+      sounds.error();
+    }
+    setTimeout(nextQuestion, 900);
+  };
+
   useEffect(() => {
-    if (screen !== "quiz") return;
-
-    const i = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
+    if (screen !== "quiz" || !q || locked) return undefined;
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
           sounds.error();
-          next();
-          return QUESTION_TIME;
+          setFlash("wrong");
+          setLocked(true);
+          setTimeout(nextQuestion, 700);
+          return 0;
         }
-
-        if (t <= 3) sounds.tick();
-        return t - 1;
+        if (prev <= 3) sounds.tick();
+        return prev - 1;
       });
     }, 1000);
-
-    return () => clearInterval(i);
-  }, [screen, current]);
-
-  const medal = score >= 9 ? "🥇" : score >= 7 ? "🥈" : score >= 5 ? "🥉" : "🎖";
+    return () => clearInterval(interval);
+  }, [screen, current, locked, q]);
 
   return (
-    <div className={`app ${flash || ""}`}>
+    <div className={`appShell ${flash || ""}`}>
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; background: #fff7ed; }
+        button { font: inherit; }
+        .appShell { min-height: 100vh; padding: 16px; transition: background .25s ease; background: #fff7ed; }
+        .appShell.correct { background: #ecfdf5; }
+        .appShell.wrong { background: #fef2f2; }
+        .topbar { max-width: 1100px; margin: 0 auto 14px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+        .toolBtn, .levelBtn, .actionBtn { border: none; border-radius: 14px; cursor: pointer; font-weight: 700; }
+        .toolBtn { background: white; padding: 12px 16px; box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+        .hero { max-width: 900px; margin: 24px auto; text-align: center; }
+        .heroCard { position: relative; overflow: hidden; border-radius: 22px; box-shadow: 0 14px 34px rgba(0,0,0,.18); }
+        .heroCard img { width: 100%; display: block; transform: scale(1.05); animation: zoomHero 18s ease-in-out infinite alternate; }
+        .heroOverlay { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.5)); display: flex; align-items: center; justify-content: center; flex-direction: column; color: white; padding: 20px; text-align: center; }
+        .heroOverlay h1 { margin: 0 0 10px; font-size: clamp(2rem, 4vw, 3.4rem); }
+        .heroOverlay p { margin: 0; max-width: 560px; }
+        .playBtn { margin-top: 16px; background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 24px; border: none; border-radius: 14px; font-weight: 800; cursor: pointer; }
+        .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
+        .levelBtn { background: white; padding: 22px; box-shadow: 0 10px 24px rgba(0,0,0,.08); }
+        .levelTitle { display: block; font-size: 1.35rem; margin-bottom: 6px; }
+        .levelText { color: #6b7280; font-size: .95rem; }
+        .quiz { max-width: 1120px; margin: 18px auto; background: white; border-radius: 24px; padding: 20px; box-shadow: 0 16px 40px rgba(0,0,0,.08); }
+        .quiz.present { max-width: 1280px; padding: 28px; }
+        .metaRow { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+        .metaGroup { display: flex; gap: 10px; flex-wrap: wrap; }
+        .pill { background: #f3f4f6; border-radius: 999px; padding: 8px 12px; font-size: .95rem; font-weight: 700; }
+        .quizGrid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 22px; align-items: start; }
+        .quiz.present .quizGrid { grid-template-columns: 1fr; }
+        .questionImage { width: 100%; border-radius: 18px; display: block; background: #f3f4f6; object-fit: cover; max-height: 520px; }
+        .quiz.present .questionImage { max-height: 46vh; }
+        .questionPanel h2 { margin: 6px 0 18px; font-size: clamp(1.45rem, 2.5vw, 2.6rem); line-height: 1.15; }
+        .quiz.present .questionPanel h2 { font-size: clamp(2rem, 4vw, 3.6rem); }
+        .options { display: grid; gap: 12px; }
+        .quiz.present .options { grid-template-columns: 1fr 1fr; gap: 16px; }
+        .optionBtn { background: white; border: 2px solid #e5e7eb; border-radius: 18px; padding: 16px 18px; display: flex; gap: 14px; align-items: center; text-align: left; cursor: pointer; }
+        .optionBtn:hover { border-color: #f59e0b; background: #fffbeb; }
+        .optionBtn:disabled { opacity: .88; cursor: default; }
+        .quiz.present .optionBtn { min-height: 92px; font-size: 1.25rem; padding: 20px; }
+        .optionKey { width: 42px; height: 42px; border-radius: 999px; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; flex: 0 0 auto; }
+        .quiz.present .optionKey { width: 56px; height: 56px; font-size: 1.4rem; }
+        .belowRow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+        .infoCard { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 20px; padding: 18px; }
+        .timerWrap { display: flex; justify-content: center; padding: 8px 0; }
+        .circleTimer { width: 160px; height: 160px; border-radius: 50%; display: grid; place-items: center; font-size: 2.5rem; font-weight: 900; position: relative; background: conic-gradient(#f97316 var(--timer), #e5e7eb 0); }
+        .circleTimer::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: white; }
+        .circleTimer span { position: relative; z-index: 1; }
+        .quiz.present .circleTimer { width: 210px; height: 210px; font-size: 3.4rem; }
+        .progressBar { width: 100%; height: 12px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin-top: 10px; }
+        .progressFill { height: 100%; background: linear-gradient(90deg, #f59e0b, #f97316); }
+        .muted { color: #6b7280; text-align: center; }
+        .results { max-width: 900px; margin: 34px auto; text-align: center; background: white; border-radius: 24px; padding: 28px; box-shadow: 0 16px 40px rgba(0,0,0,.08); }
+        .results h1 { font-size: 4rem; margin: 0; }
+        .results h2 { font-size: 2.2rem; margin: 8px 0; }
+        .results p { color: #6b7280; }
+        .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+        .actionBtn { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 18px; }
+        @keyframes zoomHero { from { transform: scale(1.05); } to { transform: scale(1.12); } }
+        @media (max-width: 900px) {
+          .levels, .quizGrid, .belowRow, .quiz.present .options { grid-template-columns: 1fr; }
+          .quiz.present .optionBtn { min-height: unset; font-size: 1.05rem; }
+          .circleTimer, .quiz.present .circleTimer { width: 140px; height: 140px; font-size: 2.2rem; }
+        }
+      `}</style>
 
-<div className="topbar">
-  <button className="toggleBtn" onClick={()=>setSoundEnabled(v=>!v)}>{soundEnabled ? "🔊 Sonido" : "🔇 Silencio"}</button>
-  <button className="toggleBtn" onClick={()=>setPresentationMode(v=>!v)}>{presentationMode ? "🖥️ Modo normal" : "🎥 Modo presentación"}</button>
-</div>
-
-<style>{`
-
-body{margin:0;font-family:system-ui;background:#fff7ed}
-
-.app{min-height:100vh;padding:16px;transition:background .25s ease}
-.app.correct{background:#ecfdf5}
-.app.wrong{background:#fef2f2}
-
-.hero{max-width:900px;margin:32px auto;text-align:center}
-.hero img{width:100%;border-radius:20px;box-shadow:0 12px 32px rgba(0,0,0,.18)}
-.hero h1{font-size:clamp(2rem,4vw,3.4rem);margin:18px 0 8px}
-
-.topbar{max-width:1100px;margin:0 auto 12px;display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
-.toggleBtn,.homeBtn,button{padding:14px 18px;border-radius:14px;border:none;font-weight:700;cursor:pointer}
-.toggleBtn{background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-
-.levels{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
-.levels button{background:white;box-shadow:0 10px 24px rgba(0,0,0,.08)}
-
-.quiz{max-width:1100px;margin:20px auto;background:white;padding:20px;border-radius:24px;box-shadow:0 16px 40px rgba(0,0,0,.08)}
-.quiz.present{max-width:1280px;padding:28px}
-.quizGrid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:start}
-.quiz.present .quizGrid{grid-template-columns:1fr}
-
-.metaRow{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
-.pill{background:#f3f4f6;padding:8px 12px;border-radius:999px;font-size:.95rem;font-weight:700}
-
-.questionImage{width:100%;border-radius:18px;display:block;object-fit:cover;max-height:520px;background:#f3f4f6}
-.quiz.present .questionImage{max-height:46vh}
-
-.questionPanel h2{font-size:clamp(1.45rem,2.6vw,2.6rem);line-height:1.15;margin:8px 0 18px}
-.quiz.present .questionPanel h2{font-size:clamp(2rem,4vw,3.6rem)}
-
-.options{display:grid;gap:12px;margin-top:15px}
-.options button{background:white;border:2px solid #e5e7eb;text-align:left;display:flex;gap:14px;align-items:center;padding:16px 18px;transition:.18s ease}
-.options button:hover{border-color:#f59e0b;background:#fffbeb}
-.options button:disabled{opacity:.88}
-.quiz.present .options{grid-template-columns:1fr 1fr;gap:16px}
-.quiz.present .options button{min-height:92px;font-size:1.3rem;padding:22px}
-.optionKey{width:42px;height:42px;border-radius:999px;background:#f3f4f6;display:inline-flex;align-items:center;justify-content:center;font-weight:900;flex:0 0 auto}
-.quiz.present .optionKey{width:56px;height:56px;font-size:1.45rem}
-
-.sidePanel{display:grid;gap:16px}
-.timerCard,.scoreCard{background:#fff7ed;border:1px solid #fed7aa;border-radius:20px;padding:18px}
-.quiz.present .sidePanel{grid-template-columns:1fr 1fr}
-
-.timerWrap{display:flex;justify-content:center;align-items:center;padding:8px 0}
-.circleTimer{width:160px;height:160px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:2.5rem;color:#111827;position:relative;background:conic-gradient(#f97316 var(--p), #e5e7eb 0)}
-.circleTimer::before{content:"";position:absolute;inset:12px;background:#fff;border-radius:50%}
-.circleTimer span{position:relative;z-index:1}
-.quiz.present .circleTimer{width:210px;height:210px;font-size:3.5rem}
-
-.progressBar{width:100%;height:12px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin-top:10px}
-.progressFill{height:100%;background:linear-gradient(90deg,#f59e0b,#f97316)}
-
-.autoText{color:#6b7280;font-size:.95rem;text-align:center}
-.results{text-align:center;max-width:900px;margin:40px auto;background:white;padding:28px;border-radius:24px;box-shadow:0 16px 40px rgba(0,0,0,.08)}
-.results h1{font-size:4rem;margin:0}
-.results h2{font-size:2.3rem;margin:6px 0}
-.results p{color:#6b7280}
-
-@media (max-width: 900px){
-  .levels{grid-template-columns:1fr}
-  .quizGrid,.quiz.present .quizGrid,.quiz.present .options,.quiz.present .sidePanel{grid-template-columns:1fr}
-  .quiz.present .options button{font-size:1.05rem;min-height:unset}
-  .circleTimer,.quiz.present .circleTimer{width:140px;height:140px;font-size:2.2rem}
-}
-
-`}</style>
-
-{screen==="home" && (
-<div className="hero">
-<img src="/images/portada.png" />
-<h1>Trivial de Semana Santa</h1>
-<div className="levels">
-<button onClick={()=>startGame("facil")}>Fácil</button>
-<button onClick={()=>startGame("medio")}>Medio</button>
-<button onClick={()=>startGame("dificil")}>Difícil</button>
-</div>
-</div>
-)}
-
-{screen==="quiz" && q && (
-<div className={`quiz ${presentationMode ? "present" : ""}`}>
-  <div className="metaRow">
-    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-      <span className="pill">Nivel {LEVEL_LABELS[level]}</span>
-      <span className="pill">Pregunta {current + 1} / {questions.length}</span>
-    </div>
-    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-      <span className="pill">Puntuación {score}</span>
-    </div>
-  </div>
-
-  <div className="quizGrid">
-    <div>
-      <img className="questionImage" src={q.image} alt={q.text} />
-    </div>
-
-    <div className="questionPanel">
-      <h2>{q.text}</h2>
-
-      <div className="options">
-        {q.options.map((o,i)=>(
-          <button key={i} onClick={()=>answer(i)} disabled={locked}>
-            <span className="optionKey">{String.fromCharCode(65+i)}</span>
-            <span>{o}</span>
-          </button>
-        ))}
+      <div className="topbar">
+        <button className="toolBtn" onClick={() => setSoundEnabled((v) => !v)}>{soundEnabled ? "🔊 Sonido" : "🔇 Silencio"}</button>
+        <button className="toolBtn" onClick={() => setPresentationMode((v) => !v)}>{presentationMode ? "🖥️ Modo normal" : "🎥 Modo presentación"}</button>
       </div>
+
+      {screen === "home" && (
+        <div className="hero">
+          <div className="heroCard">
+            <img src="/images/portada.png" alt="Portada Semana Santa" />
+            <div className="heroOverlay">
+              <h1>Trivial de Semana Santa</h1>
+              <p>Pon a prueba tus conocimientos sobre la Pasión, Muerte y Resurrección de Jesús.</p>
+              <button className="playBtn" onClick={() => document.getElementById("levels")?.scrollIntoView({ behavior: "smooth" })}>▶ JUGAR</button>
+            </div>
+          </div>
+
+          <div id="levels" className="levels">
+            {Object.entries(LEVEL_LABELS).map(([key, label]) => (
+              <button key={key} className="levelBtn" onClick={() => startGame(key)}>
+                <span className="levelTitle">{label}</span>
+                <span className="levelText">10 preguntas aleatorias de un banco de 20</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {screen === "quiz" && q && (
+        <div className={`quiz ${presentationMode ? "present" : ""}`}>
+          <div className="metaRow">
+            <div className="metaGroup">
+              <span className="pill">Nivel {LEVEL_LABELS[level]}</span>
+              <span className="pill">Pregunta {current + 1} / {questions.length}</span>
+            </div>
+            <div className="metaGroup">
+              <span className="pill">Puntuación {score}</span>
+            </div>
+          </div>
+
+          <div className="quizGrid">
+            <div>
+              <img className="questionImage" src={q.image} alt={q.text} />
+            </div>
+            <div className="questionPanel">
+              <h2>{q.text}</h2>
+              <div className="options">
+                {q.options.map((option, index) => (
+                  <button key={index} className="optionBtn" onClick={() => answer(index)} disabled={locked}>
+                    <span className="optionKey">{String.fromCharCode(65 + index)}</span>
+                    <span>{option}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="belowRow">
+            <div className="infoCard">
+              <div className="timerWrap">
+                <div className="circleTimer" style={{ "--timer": timerValue }}>
+                  <span>{timeLeft}</span>
+                </div>
+              </div>
+              <div className="muted">Tiempo restante</div>
+            </div>
+            <div className="infoCard">
+              <div style={{ fontWeight: 800, fontSize: "1.1rem", marginBottom: 6 }}>Progreso de partida</div>
+              <div className="progressBar">
+                <div className="progressFill" style={{ width: `${progress}%` }} />
+              </div>
+              <div className="muted" style={{ marginTop: 10 }}>Las preguntas avanzan automáticamente</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {screen === "results" && (
+        <div className="results">
+          <h1>{medal}</h1>
+          <h2>{score}/10</h2>
+          <p>{score >= 9 ? "¡Excelente!" : score >= 7 ? "Muy buen resultado" : score >= 5 ? "Buen trabajo" : "Puedes volver a intentarlo"}</p>
+          <div className="actions">
+            <button className="actionBtn" onClick={() => startGame(level)}>Jugar otra vez</button>
+            <button className="actionBtn" onClick={() => setScreen("home")}>Cambiar nivel</button>
+          </div>
+        </div>
+      )}
     </div>
-  </div>
-
-  <div className="sidePanel" style={{marginTop:20}}>
-    <div className="timerCard">
-      <div className="timerWrap">
-        <div className="circleTimer" style={{"--p": timerPct}}><span>{timeLeft}</span></div>
-      </div>
-      <div className="autoText">Tiempo restante</div>
-    </div>
-
-    <div className="scoreCard">
-      <div style={{fontWeight:800,fontSize:"1.1rem",marginBottom:6}}>Progreso de partida</div>
-      <div className="progressBar"><div className="progressFill" style={{width:`${progress}%`}} /></div>
-      <div className="autoText" style={{marginTop:10}}>Las preguntas avanzan automáticamente</div>
-    </div>
-  </div>
-</div>
-)} disabled={locked}>{o}</button>
-))}
-</div>
-</div>
-)}
-
-{screen==="results" && (
-<div className="results">
-  <h1>{medal}</h1>
-  <h2>{score}/10</h2>
-  <p>{score >= 9 ? "¡Excelente!" : score >= 7 ? "Muy buen resultado" : score >= 5 ? "Buen trabajo" : "Puedes volver a intentarlo"}</p>
-  <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap",marginTop:18}}>
-    <button className="homeBtn" onClick={()=>startGame(level)}>Jugar otra vez</button>
-    <button className="homeBtn" onClick={()=>setScreen("home")}>Cambiar nivel</button>
-  </div>
-</div>
-)}>Volver a jugar</button>
-</div>
-)}
-
-</div>
   );
 }
