@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { initializeApp } from "firebase/app";
-import { addDoc, collection, getDocs, getFirestore, limit, orderBy, query, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, getDocs, getFirestore } from "firebase/firestore";
 
 const QUESTION_TIME = 7;
 
@@ -170,8 +170,11 @@ export default function App() {
   useEffect(() => {
     async function loadScores() {
       try {
-        const snapshot = await getDocs(query(scoresCollection, orderBy("createdAt", "desc"), limit(10)));
-        const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const snapshot = await getDocs(scoresCollection);
+        const rows = snapshot.docs
+          .map((doc) => ({ id: doc.id, ...doc.data() }))
+          .sort((a, b) => new Date(b.date) - new Date(a.date))
+          .slice(0, 10);
         setSavedScores(rows);
       } catch (error) {
         console.error("Error cargando puntuaciones:", error);
@@ -233,24 +236,33 @@ export default function App() {
       setSaveMessage("Escribe un nombre para guardar la puntuación.");
       return;
     }
+
     setSavingScore(true);
     setSaveMessage("");
+
     try {
-      await addDoc(scoresCollection, {
+      const payload = {
         name: trimmedName,
-        score,
-        level,
-        project: "Semana Santa 2026",
-        createdAt: serverTimestamp(),
-      });
-      const snapshot = await getDocs(query(scoresCollection, orderBy("createdAt", "desc"), limit(10)));
-      const rows = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        score: Number(score),
+        difficulty: level === "facil" ? "fácil" : level === "medio" ? "medio" : "difícil",
+        date: new Date().toISOString(),
+      };
+
+      await addDoc(scoresCollection, payload);
+
+      const snapshot = await getDocs(scoresCollection);
+      const rows = snapshot.docs
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 10);
+
       setSavedScores(rows);
       setShowSavePanel(false);
       setSaveMessage("Puntuación guardada correctamente.");
     } catch (error) {
       console.error("Error guardando puntuación:", error);
-      setSaveMessage("No se pudo guardar en Firebase. Revisa la configuración del proyecto.");
+      const message = error?.message || "No se pudo guardar en Firebase.";
+      setSaveMessage(`No se pudo guardar en Firebase. ${message}`);
     } finally {
       setSavingScore(false);
     }
@@ -312,10 +324,11 @@ export default function App() {
         .quiz.present .optionBtn { min-height: 92px; font-size: 1.25rem; padding: 20px; }
         .optionKey { width: 42px; height: 42px; border-radius: 999px; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; flex: 0 0 auto; }
         .quiz.present .optionKey { width: 56px; height: 56px; font-size: 1.4rem; }
-        .topStatus { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; margin: 0 0 16px; }
+        .topStatus { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: end; margin: 0 0 16px; }
         .simpleLabel { font-size: .92rem; color: #6b7280; margin-bottom: 6px; }
-        .simpleTime { font-size: 1.2rem; font-weight: 800; background: #f3f4f6; border-radius: 12px; padding: 10px 14px; min-width: 88px; text-align: center; }
-        .simpleNextWrap { display: flex; justify-content: flex-end; }
+        .simpleTime { font-size: 1.2rem; font-weight: 800; background: #f3f4f6; border-radius: 12px; padding: 10px 14px; min-width: 96px; text-align: center; white-space: nowrap; }
+        .simpleNextWrap { display: flex; justify-content: flex-end; align-items: end; min-width: 160px; }
+        .simpleNextPlaceholder { min-width: 160px; height: 52px; }
         .belowRow { display: none; }
         .muted { color: #6b7280; text-align: center; }
         .feedbackPanel { margin-top: 18px; display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; border-radius: 18px; background: #f9fafb; }
@@ -332,7 +345,8 @@ export default function App() {
         .scoreItem:last-child { border-bottom: none; }
         @media (max-width: 900px) {
           .levels, .quizGrid, .quiz.present .options { grid-template-columns: 1fr; }
-          .topStatus { grid-template-columns: 1fr; }
+          .topStatus { grid-template-columns: 1fr; align-items: stretch; }
+          .simpleNextWrap, .simpleNextPlaceholder { min-width: 0; width: 100%; }
           .quiz.present .optionBtn { min-height: unset; font-size: 1.05rem; }
           .circleTimer, .quiz.present .circleTimer { width: 140px; height: 140px; font-size: 2.2rem; }
         }
@@ -382,8 +396,10 @@ export default function App() {
               <div className="simpleTime">⏱ {timeLeft}s</div>
             </div>
             <div className="simpleNextWrap">
-              {locked && (
+              {locked ? (
                 <button className="nextBtn" onClick={nextQuestion}>{current + 1 >= questions.length ? "Ver resultado" : "Siguiente"}</button>
+              ) : (
+                <div className="simpleNextPlaceholder" />
               )}
             </div>
           </div>
@@ -450,7 +466,7 @@ export default function App() {
             ) : (
               savedScores.map((entry) => (
                 <div key={entry.id} className="scoreItem">
-                  <span><strong>{entry.name}</strong> · {LEVEL_LABELS[entry.level] || entry.level}</span>
+                  <span><strong>{entry.name}</strong> · {entry.difficulty || LEVEL_LABELS[entry.level] || entry.level}</span>
                   <span>{entry.score}/10</span>
                 </div>
               ))
