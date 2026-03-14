@@ -134,11 +134,37 @@ export default function App() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [presentationMode, setPresentationMode] = useState(false);
   const [flash, setFlash] = useState(null);
+  const [playerName, setPlayerName] = useState("");
+  const [savedScores, setSavedScores] = useState([]);
 
   const sounds = useGameSounds(soundEnabled);
   const q = questions[current];
   const progress = questions.length ? ((current + 1) / questions.length) * 100 : 0;
   const timerValue = `${(timeLeft / QUESTION_TIME) * 100}%`;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedName = window.localStorage.getItem("ss_player_name") || "";
+    const storedScores = JSON.parse(window.localStorage.getItem("ss_scores") || "[]");
+    setPlayerName(storedName);
+    setSavedScores(Array.isArray(storedScores) ? storedScores : []);
+  }, []);
+
+  const saveScore = (finalScore) => {
+    if (typeof window === "undefined") return;
+    const trimmedName = playerName.trim() || "Jugador";
+    const entry = {
+      name: trimmedName,
+      score: finalScore,
+      level,
+      date: new Date().toISOString(),
+    };
+    const nextScores = [entry, ...savedScores].slice(0, 10);
+    setSavedScores(nextScores);
+    window.localStorage.setItem("ss_player_name", trimmedName);
+    window.localStorage.setItem("ss_scores", JSON.stringify(nextScores));
+    if (playerName !== trimmedName) setPlayerName(trimmedName);
+  };
 
   const medal = useMemo(() => {
     if (score >= 9) return "🥇";
@@ -165,6 +191,7 @@ export default function App() {
     setLocked(false);
     if (current + 1 >= questions.length) {
       sounds.final();
+      saveScore(score);
       setScreen("results");
       return;
     }
@@ -273,6 +300,13 @@ export default function App() {
       `}</style>
 
       <div className="topbar">
+        <input
+          type="text"
+          value={playerName}
+          onChange={(e) => setPlayerName(e.target.value)}
+          placeholder="Nombre del jugador"
+          style={{ padding: "12px 14px", borderRadius: 14, border: "1px solid #d1d5db", minWidth: 220, background: "white" }}
+        />
         <button className="toolBtn" onClick={() => setSoundEnabled((v) => !v)}>{soundEnabled ? "🔊 Sonido" : "🔇 Silencio"}</button>
         <button className="toolBtn" onClick={() => setPresentationMode((v) => !v)}>{presentationMode ? "🖥️ Modo normal" : "🎥 Modo presentación"}</button>
       </div>
@@ -281,18 +315,12 @@ export default function App() {
         <div className="hero">
           <div className="heroCard">
             <img src="/images/portada.png" alt="Portada Semana Santa" />
-            <div className="heroOverlay">
-              <h1>Trivial de Semana Santa</h1>
-              <p>Pon a prueba tus conocimientos sobre la Pasión, Muerte y Resurrección de Jesús.</p>
-              <button className="playBtn" onClick={() => document.getElementById("levels")?.scrollIntoView({ behavior: "smooth" })}>▶ JUGAR</button>
             </div>
-          </div>
 
           <div id="levels" className="levels">
             {Object.entries(LEVEL_LABELS).map(([key, label]) => (
               <button key={key} className="levelBtn" onClick={() => startGame(key)}>
                 <span className="levelTitle">{label}</span>
-                <span className="levelText">10 preguntas aleatorias de un banco de 20</span>
               </button>
             ))}
           </div>
@@ -353,6 +381,20 @@ export default function App() {
           <h1>{medal}</h1>
           <h2>{score}/10</h2>
           <p>{score >= 9 ? "¡Excelente!" : score >= 7 ? "Muy buen resultado" : score >= 5 ? "Buen trabajo" : "Puedes volver a intentarlo"}</p>
+          <p><strong>{playerName.trim() || "Jugador"}</strong></p>
+          <div style={{ maxWidth: 520, margin: "18px auto 0", textAlign: "left", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 18, padding: 16 }}>
+            <div style={{ fontWeight: 800, marginBottom: 10 }}>Últimas puntuaciones</div>
+            {savedScores.length === 0 ? (
+              <div style={{ color: "#6b7280" }}>Todavía no hay puntuaciones guardadas.</div>
+            ) : (
+              savedScores.map((entry, index) => (
+                <div key={`${entry.date}-${index}`} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: index < savedScores.length - 1 ? "1px solid #e5e7eb" : "none" }}>
+                  <span><strong>{entry.name}</strong> · {LEVEL_LABELS[entry.level]}</span>
+                  <span>{entry.score}/10</span>
+                </div>
+              ))
+            )}
+          </div>
           <div className="actions">
             <button className="actionBtn" onClick={() => startGame(level)}>Jugar otra vez</button>
             <button className="actionBtn" onClick={() => setScreen("home")}>Cambiar nivel</button>
