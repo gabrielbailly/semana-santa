@@ -11,12 +11,12 @@ const LEVEL_LABELS = {
 };
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDBW4WQ6hXqEWEd0AHCP5aXeU0m1bplQIk",
-  authDomain: "gen-lang-client-0498976958.firebaseapp.com",
-  projectId: "gen-lang-client-0498976958",
-  storageBucket: "gen-lang-client-0498976958.firebasestorage.app",
-  messagingSenderId: "926052083535",
-  appId: "1:926052083535:web:a6438c54b67c1b3491c73a"
+  apiKey: "TU_API_KEY",
+  authDomain: "semana-santa-2026.firebaseapp.com",
+  projectId: "semana-santa-2026",
+  storageBucket: "semana-santa-2026.firebasestorage.app",
+  messagingSenderId: "TU_MESSAGING_SENDER_ID",
+  appId: "TU_APP_ID",
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
@@ -312,15 +312,11 @@ export default function App() {
         .quiz.present .optionBtn { min-height: 92px; font-size: 1.25rem; padding: 20px; }
         .optionKey { width: 42px; height: 42px; border-radius: 999px; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; flex: 0 0 auto; }
         .quiz.present .optionKey { width: 56px; height: 56px; font-size: 1.4rem; }
-        .belowRow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
-        .infoCard { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 20px; padding: 18px; }
-        .timerWrap { display: flex; justify-content: center; padding: 8px 0; }
-        .circleTimer { width: 160px; height: 160px; border-radius: 50%; display: grid; place-items: center; font-size: 2.5rem; font-weight: 900; position: relative; background: conic-gradient(#f97316 var(--timer), #e5e7eb 0); }
-        .circleTimer::before { content: ""; position: absolute; inset: 12px; border-radius: 50%; background: white; }
-        .circleTimer span { position: relative; z-index: 1; }
-        .quiz.present .circleTimer { width: 210px; height: 210px; font-size: 3.4rem; }
-        .progressBar { width: 100%; height: 12px; background: #e5e7eb; border-radius: 999px; overflow: hidden; margin-top: 10px; }
-        .progressFill { height: 100%; background: linear-gradient(90deg, #f59e0b, #f97316); }
+        .topStatus { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; margin: 0 0 16px; }
+        .simpleLabel { font-size: .92rem; color: #6b7280; margin-bottom: 6px; }
+        .simpleTime { font-size: 1.2rem; font-weight: 800; background: #f3f4f6; border-radius: 12px; padding: 10px 14px; min-width: 88px; text-align: center; }
+        .simpleNextWrap { display: flex; justify-content: flex-end; }
+        .belowRow { display: none; }
         .muted { color: #6b7280; text-align: center; }
         .feedbackPanel { margin-top: 18px; display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; border-radius: 18px; background: #f9fafb; }
         .nextBtn, .saveBtn, .actionBtn { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 18px; }
@@ -335,7 +331,8 @@ export default function App() {
         .scoreItem { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
         .scoreItem:last-child { border-bottom: none; }
         @media (max-width: 900px) {
-          .levels, .quizGrid, .belowRow, .quiz.present .options { grid-template-columns: 1fr; }
+          .levels, .quizGrid, .quiz.present .options { grid-template-columns: 1fr; }
+          .topStatus { grid-template-columns: 1fr; }
           .quiz.present .optionBtn { min-height: unset; font-size: 1.05rem; }
           .circleTimer, .quiz.present .circleTimer { width: 140px; height: 140px; font-size: 2.2rem; }
         }
@@ -373,6 +370,24 @@ export default function App() {
             </div>
           </div>
 
+          <div className="topStatus">
+            <div>
+              <div className="simpleLabel">Progreso</div>
+              <div className="progressBar">
+                <div className="progressFill" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="simpleLabel">Tiempo</div>
+              <div className="simpleTime">⏱ {timeLeft}s</div>
+            </div>
+            <div className="simpleNextWrap">
+              {locked && (
+                <button className="nextBtn" onClick={nextQuestion}>{current + 1 >= questions.length ? "Ver resultado" : "Siguiente"}</button>
+              )}
+            </div>
+          </div>
+
           <div className="quizGrid">
             <div>
               <img className="questionImage" src={q.image} alt={q.text} />
@@ -395,24 +410,6 @@ export default function App() {
             </div>
           </div>
 
-          <div className="belowRow">
-            <div className="infoCard">
-              <div className="timerWrap">
-                <div className="circleTimer" style={{ "--timer": timerValue }}>
-                  <span>{timeLeft}</span>
-                </div>
-              </div>
-              <div className="muted">Tiempo restante</div>
-            </div>
-            <div className="infoCard">
-              <div style={{ fontWeight: 800, fontSize: "1.1rem", marginBottom: 6 }}>Progreso de partida</div>
-              <div className="progressBar">
-                <div className="progressFill" style={{ width: `${progress}%` }} />
-              </div>
-              <div className="muted" style={{ marginTop: 10 }}>Las preguntas no avanzan solas. Pulsa el botón para continuar.</div>
-            </div>
-          </div>
-
           {locked && (
             <div className="feedbackPanel">
               <div>
@@ -422,7 +419,6 @@ export default function App() {
                     ? "✅ ¡Correcta!"
                     : `❌ La respuesta correcta es: ${q.options[q.correctAnswer]}`}
               </div>
-              <button className="nextBtn" onClick={nextQuestion}>{current + 1 >= questions.length ? "Ver resultado" : "Siguiente"}</button>
             </div>
           )}
         </div>
