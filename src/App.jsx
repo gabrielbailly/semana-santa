@@ -44,6 +44,7 @@ const QUESTIONS = [
   { id: 18, text: "¿Qué cerraba la entrada del sepulcro?", options: ["Una puerta", "Una gran piedra", "Un muro", "Una cortina"], correctAnswer: 1, difficulty: "facil", image: "/images/8.jpg" },
   { id: 19, text: "¿Quién aparece junto al sepulcro vacío?", options: ["Un ángel", "Un soldado", "Pedro", "Pilato"], correctAnswer: 0, difficulty: "facil", image: "/images/9.jpg" },
   { id: 20, text: "¿Quién se encuentra con Jesús resucitado?", options: ["María Magdalena", "María y Marta", "Verónica", "Salomé"], correctAnswer: 0, difficulty: "facil", image: "/images/10.jpg" },
+
   { id: 21, text: "¿Qué sacramento instituye Jesús en la Última Cena?", options: ["Bautismo", "Eucaristía", "Confirmación", "Matrimonio"], correctAnswer: 1, difficulty: "medio", image: "/images/1.jpg" },
   { id: 22, text: "¿Qué bebida comparte Jesús con sus discípulos?", options: ["Agua", "Vino", "Leche", "Aceite"], correctAnswer: 1, difficulty: "medio", image: "/images/1.jpg" },
   { id: 23, text: "¿Qué fiesta judía celebraban durante esta cena?", options: ["Pentecostés", "Pascua", "Hanukkah", "Yom Kippur"], correctAnswer: 1, difficulty: "medio", image: "/images/1.jpg" },
@@ -64,6 +65,7 @@ const QUESTIONS = [
   { id: 38, text: "¿Qué mujeres fueron al sepulcro?", options: ["María Magdalena y otras mujeres", "Solo María", "Las romanas", "Las discípulas"], correctAnswer: 0, difficulty: "medio", image: "/images/9.jpg" },
   { id: 39, text: "¿Qué día ocurrió la resurrección?", options: ["Domingo", "Viernes", "Jueves", "Sábado"], correctAnswer: 0, difficulty: "medio", image: "/images/10.jpg" },
   { id: 40, text: "¿Qué reconoce María Magdalena al ver a Jesús?", options: ["Que está vivo", "Que es un ángel", "Que es Pedro", "Que es un soldado"], correctAnswer: 0, difficulty: "medio", image: "/images/10.jpg" },
+
   { id: 41, text: "¿Qué gesto de servicio realizó Jesús durante la Última Cena?", options: ["Lavó los pies a los discípulos", "Curó a un enfermo", "Multiplicó panes", "Resucitó a Lázaro"], correctAnswer: 0, difficulty: "dificil", image: "/images/1.jpg" },
   { id: 42, text: "¿Quién traicionó a Jesús?", options: ["Judas Iscariote", "Pedro", "Juan", "Santiago"], correctAnswer: 0, difficulty: "dificil", image: "/images/1.jpg" },
   { id: 43, text: "¿Qué nuevo mandamiento dio Jesús en la Última Cena?", options: ["Amaos unos a otros", "Conquistad el mundo", "Construid templos", "Haced sacrificios"], correctAnswer: 0, difficulty: "dificil", image: "/images/1.jpg" },
@@ -157,8 +159,11 @@ export default function App() {
 
   const sounds = useGameSounds(soundEnabled);
   const q = questions[current];
-  const progress = questions.length ? ((current + 1) / questions.length) * 100 : 0;
   const timerValue = `${(timeLeft / QUESTION_TIME) * 100}%`;
+
+  let timerColor = "#22c55e";
+  if (timeLeft <= 4) timerColor = "#f59e0b";
+  if (timeLeft <= 2) timerColor = "#ef4444";
 
   const medal = useMemo(() => {
     if (score >= 9) return "🥇";
@@ -431,22 +436,8 @@ export default function App() {
 
         .timeBarFill {
           height: 100%;
-          background: linear-gradient(90deg, #f59e0b, #ef4444);
+          transition: width .25s linear, background .25s ease;
           border-radius: 999px;
-          transition: width .25s linear;
-        }
-
-        .progressBar {
-          width: 100%;
-          height: 10px;
-          background: #e5e7eb;
-          border-radius: 999px;
-          overflow: hidden;
-        }
-
-        .progressFill {
-          height: 100%;
-          background: linear-gradient(90deg, #f59e0b, #f97316);
         }
 
         .simpleNextWrap {
@@ -719,12 +710,14 @@ export default function App() {
                 </span>
 
                 <div className="timeBarTrack">
-                  <div className="timeBarFill" style={{ width: timerValue }} />
+                  <div
+                    className="timeBarFill"
+                    style={{
+                      width: timerValue,
+                      background: timerColor,
+                    }}
+                  />
                 </div>
-              </div>
-
-              <div className="progressBar">
-                <div className="progressFill" style={{ width: `${progress}%` }} />
               </div>
             </div>
 
