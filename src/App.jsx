@@ -11,12 +11,12 @@ const LEVEL_LABELS = {
 };
 
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "semana-santa-2026.firebaseapp.com",
-  projectId: "semana-santa-2026",
-  storageBucket: "semana-santa-2026.firebasestorage.app",
-  messagingSenderId: "TU_MESSAGING_SENDER_ID",
-  appId: "TU_APP_ID",
+   apiKey: "AIzaSyB3HryH0Mg996QV0HUdaxYox4ah5xDnYJM",
+  authDomain: "semana-santa-f9967.firebaseapp.com",
+  projectId: "semana-santa-f9967",
+  storageBucket: "semana-santa-f9967.firebasestorage.app",
+  messagingSenderId: "85757700422",
+  appId: "1:85757700422:web:7b762e3a9ac9be34c3dd47",
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
