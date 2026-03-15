@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { initializeApp } from "firebase/app";
-import { addDoc, collection, deleteDoc, doc, getDocs, getFirestore } from "firebase/firestore";
+import { addDoc, collection, getDocs, getFirestore } from "firebase/firestore";
 
 const QUESTION_TIME = 7;
 
@@ -19,7 +19,6 @@ const firebaseConfig = {
   appId: "1:85757700422:web:7b762e3a9ac9be34c3dd47",
 };
 
-const ADMIN_PASSWORD = "CAMBIA_ESTA_CLAVE";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
@@ -156,10 +155,6 @@ export default function App() {
   const [savedScores, setSavedScores] = useState([]);
   const [savingScore, setSavingScore] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [adminMode, setAdminMode] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("");
-  const [adminMessage, setAdminMessage] = useState("");
-  const [deletingId, setDeletingId] = useState("");
 
   const sounds = useGameSounds(soundEnabled);
   const q = questions[current];
@@ -236,31 +231,6 @@ export default function App() {
     }
   };
 
-  const enableAdminMode = () => {
-    if (adminPassword === ADMIN_PASSWORD) {
-      setAdminMode(true);
-      setAdminMessage("Modo administrador activado.");
-      setAdminPassword("");
-      return;
-    }
-    setAdminMode(false);
-    setAdminMessage("Contraseña incorrecta.");
-  };
-
-  const deleteScore = async (id) => {
-    if (!adminMode || !id) return;
-    try {
-      setDeletingId(id);
-      await deleteDoc(doc(db, "scores", id));
-      setSavedScores((prev) => prev.filter((entry) => entry.id !== id));
-      setAdminMessage("Registro eliminado.");
-    } catch (error) {
-      console.error("Error eliminando puntuación:", error);
-      setAdminMessage("No se pudo eliminar el registro.");
-    } finally {
-      setDeletingId("");
-    }
-  };
 
   const saveScore = async () => {
     const trimmedName = playerName.trim();
@@ -370,7 +340,7 @@ export default function App() {
         .results h2 { font-size: 2.2rem; margin: 8px 0; }
         .results p { color: #6b7280; }
         .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
-        .saveCard, .scoresCard, .adminCard { max-width: 520px; margin: 18px auto 0; text-align: left; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; }
+        .saveCard, .scoresCard { max-width: 520px; margin: 18px auto 0; text-align: left; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; }
         .saveRow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
         .saveInput { flex: 1; min-width: 220px; padding: 12px 14px; border-radius: 12px; border: 1px solid #d1d5db; background: white; }
         .scoreItem { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
@@ -491,28 +461,6 @@ export default function App() {
 
           {saveMessage && <p>{saveMessage}</p>}
 
-          <div className="adminCard">
-            <div style={{ fontWeight: 800, marginBottom: 10 }}>Administración</div>
-            {!adminMode ? (
-              <>
-                <div style={{ color: "#6b7280", marginBottom: 10 }}>Introduce la contraseña de administrador para borrar registros.</div>
-                <div className="saveRow">
-                  <input
-                    className="saveInput"
-                    type="password"
-                    value={adminPassword}
-                    onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="Contraseña de administrador"
-                  />
-                  <button className="saveBtn" onClick={enableAdminMode}>Entrar</button>
-                </div>
-              </>
-            ) : (
-              <div style={{ color: "#166534" }}>Modo administrador activado. Ya puedes borrar registros.</div>
-            )}
-            {adminMessage && <div style={{ marginTop: 10, color: adminMode ? "#166534" : "#b91c1c" }}>{adminMessage}</div>}
-          </div>
-
           <div className="scoresCard">
             <div style={{ fontWeight: 800, marginBottom: 10 }}>Últimas puntuaciones</div>
             {savedScores.length === 0 ? (
@@ -525,23 +473,6 @@ export default function App() {
                   </span>
                   <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                     <span>{entry.score}/10</span>
-                    {adminMode && (
-                      <button
-                        onClick={() => deleteScore(entry.id)}
-                        disabled={deletingId === entry.id}
-                        style={{
-                          border: "none",
-                          background: "#dc2626",
-                          color: "white",
-                          borderRadius: 10,
-                          padding: "8px 10px",
-                          cursor: "pointer",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {deletingId === entry.id ? "Borrando..." : "Borrar"}
-                      </button>
-                    )}
                   </div>
                 </div>
               ))
