@@ -11,7 +11,7 @@ const firebaseConfig = {
   appId: "1:85757700422:web:7b762e3a9ac9be34c3dd47"
 };
 
-const ADMIN_PASSWORD = "CAMBIA_ESTA_CLAVE";
+const ADMIN_PASSWORD = "Gbailly26$";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
