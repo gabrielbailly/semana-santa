@@ -804,7 +804,7 @@ export default function App() {
             <div className="saveCard">
               <div style={{ fontWeight: 800 }}>Guardar puntuación</div>
               <div style={{ color: "#6b7280", marginTop: 6 }}>
-                Escribe el nombre del jugador para guardar los puntos en Firebase.
+                Escribe el nombre del jugador para guardar los puntos.
               </div>
               <div className="saveRow">
                 <input
