@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { initializeApp } from "firebase/app";
-import { addDoc, collection, getDocs, getFirestore } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, getFirestore } from "firebase/firestore";
 
 const QUESTION_TIME = 7;
 
@@ -18,6 +18,8 @@ const firebaseConfig = {
   messagingSenderId: "85757700422",
   appId: "1:85757700422:web:7b762e3a9ac9be34c3dd47",
 };
+
+const ADMIN_PASSWORD = "CAMBIA_ESTA_CLAVE";
 
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
@@ -154,11 +156,15 @@ export default function App() {
   const [savedScores, setSavedScores] = useState([]);
   const [savingScore, setSavingScore] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminMessage, setAdminMessage] = useState("");
+  const [deletingId, setDeletingId] = useState("");
 
   const sounds = useGameSounds(soundEnabled);
   const q = questions[current];
   const progress = questions.length ? ((current + 1) / questions.length) * 100 : 0;
-  const timerWidth = `${(timeLeft / QUESTION_TIME) * 100}%`;
+  const timerValue = `${(timeLeft / QUESTION_TIME) * 100}%`;
 
   const medal = useMemo(() => {
     if (score >= 9) return "🥇";
@@ -207,23 +213,19 @@ export default function App() {
     setFlash(null);
     setSelected(null);
     setLocked(false);
-
     if (current + 1 >= questions.length) {
       finishGame();
       return;
     }
-
     setCurrent((prev) => prev + 1);
     setTimeLeft(QUESTION_TIME);
   };
 
   const answer = (index) => {
     if (!q || locked) return;
-
     const isCorrect = index === q.correctAnswer;
     setSelected(index);
     setLocked(true);
-
     if (isCorrect) {
       setScore((prev) => prev + 1);
       setFlash("correct");
@@ -234,9 +236,34 @@ export default function App() {
     }
   };
 
+  const enableAdminMode = () => {
+    if (adminPassword === ADMIN_PASSWORD) {
+      setAdminMode(true);
+      setAdminMessage("Modo administrador activado.");
+      setAdminPassword("");
+      return;
+    }
+    setAdminMode(false);
+    setAdminMessage("Contraseña incorrecta.");
+  };
+
+  const deleteScore = async (id) => {
+    if (!adminMode || !id) return;
+    try {
+      setDeletingId(id);
+      await deleteDoc(doc(db, "scores", id));
+      setSavedScores((prev) => prev.filter((entry) => entry.id !== id));
+      setAdminMessage("Registro eliminado.");
+    } catch (error) {
+      console.error("Error eliminando puntuación:", error);
+      setAdminMessage("No se pudo eliminar el registro.");
+    } finally {
+      setDeletingId("");
+    }
+  };
+
   const saveScore = async () => {
     const trimmedName = playerName.trim();
-
     if (!trimmedName) {
       setSaveMessage("Escribe un nombre para guardar la puntuación.");
       return;
@@ -275,7 +302,6 @@ export default function App() {
 
   useEffect(() => {
     if (screen !== "quiz" || !q || locked) return undefined;
-
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -284,12 +310,10 @@ export default function App() {
           sounds.error();
           return 0;
         }
-
         if (prev <= 3) sounds.tick();
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(interval);
   }, [screen, current, locked, q]);
 
@@ -302,390 +326,67 @@ export default function App() {
         .appShell { min-height: 100vh; padding: 16px; transition: background .25s ease; background: #fff7ed; }
         .appShell.correct { background: #ecfdf5; }
         .appShell.wrong { background: #fef2f2; }
-
-        .topbar {
-          max-width: 1100px;
-          margin: 0 auto 14px;
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .toolBtn, .levelBtn, .actionBtn, .nextBtn, .saveBtn {
-          border: none;
-          border-radius: 14px;
-          cursor: pointer;
-          font-weight: 700;
-        }
-
-        .toolBtn {
-          background: white;
-          padding: 12px 16px;
-          box-shadow: 0 6px 18px rgba(0,0,0,.08);
-        }
-
-        .hero {
-          max-width: 900px;
-          margin: 24px auto;
-          text-align: center;
-        }
-
-        .heroCard {
-          overflow: hidden;
-          border-radius: 22px;
-          box-shadow: 0 14px 34px rgba(0,0,0,.18);
-        }
-
-        .heroCard img {
-          width: 100%;
-          display: block;
-        }
-
-        .levels {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 16px;
-          margin-top: 22px;
-        }
-
-        .levelBtn {
-          background: white;
-          padding: 22px;
-          box-shadow: 0 10px 24px rgba(0,0,0,.08);
-        }
-
-        .levelTitle {
-          display: block;
-          font-size: 1.35rem;
-        }
-
-        .quiz {
-          max-width: 1120px;
-          margin: 18px auto;
-          background: white;
-          border-radius: 24px;
-          padding: 20px;
-          box-shadow: 0 16px 40px rgba(0,0,0,.08);
-        }
-
-        .quiz.present {
-          max-width: 1280px;
-          padding: 28px;
-        }
-
-        .metaRow {
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: center;
-          flex-wrap: wrap;
-          margin-bottom: 14px;
-        }
-
-        .metaGroup {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-
-        .pill {
-          background: #f3f4f6;
-          border-radius: 999px;
-          padding: 8px 12px;
-          font-size: .95rem;
-          font-weight: 700;
-        }
-
-        .topStatus {
-          display: grid;
-          grid-template-columns: minmax(0,1fr) auto;
-          gap: 12px;
-          align-items: end;
-          margin: 0 0 16px;
-        }
-
-        .questionTimeBlock {
-          display: grid;
-          gap: 8px;
-        }
-
-        .questionTimeRow {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-
-        .questionCount {
-          font-weight: 700;
-          color: #374151;
-          white-space: nowrap;
-        }
-
-        .timeBarTrack {
-          flex: 1;
-          min-width: 180px;
-          height: 10px;
-          background: #e5e7eb;
-          border-radius: 999px;
-          overflow: hidden;
-        }
-
-        .timeBarFill {
-          height: 100%;
-          background: linear-gradient(90deg, #f59e0b, #ef4444);
-          border-radius: 999px;
-          transition: width .25s linear;
-        }
-
-        .progressBar {
-          width: 100%;
-          height: 10px;
-          background: #e5e7eb;
-          border-radius: 999px;
-          overflow: hidden;
-        }
-
-        .progressFill {
-          height: 100%;
-          background: linear-gradient(90deg, #f59e0b, #f97316);
-        }
-
-        .simpleNextWrap {
-          display: flex;
-          justify-content: flex-end;
-          align-items: end;
-          min-width: 160px;
-        }
-
-        .simpleNextPlaceholder {
-          min-width: 160px;
-          height: 52px;
-        }
-
-        .nextBtn, .saveBtn, .actionBtn {
-          background: linear-gradient(135deg, #f59e0b, #ea580c);
-          color: white;
-          padding: 14px 18px;
-        }
-
-        .quizGrid {
-          display: grid;
-          grid-template-columns: 1.05fr .95fr;
-          gap: 22px;
-          align-items: start;
-        }
-
-        .quiz.present .quizGrid {
-          grid-template-columns: 1fr;
-        }
-
-        .questionImage {
-          width: 100%;
-          border-radius: 18px;
-          display: block;
-          background: #f3f4f6;
-          object-fit: cover;
-          max-height: 520px;
-        }
-
-        .quiz.present .questionImage {
-          max-height: 46vh;
-        }
-
-        .questionPanel h2 {
-          margin: 6px 0 18px;
-          font-size: clamp(1.45rem, 2.5vw, 2.6rem);
-          line-height: 1.15;
-        }
-
-        .quiz.present .questionPanel h2 {
-          font-size: clamp(2rem, 4vw, 3.6rem);
-        }
-
-        .options {
-          display: grid;
-          gap: 12px;
-        }
-
-        .quiz.present .options {
-          grid-template-columns: 1fr 1fr;
-          gap: 16px;
-        }
-
-        .optionBtn {
-          background: white;
-          border: 2px solid #e5e7eb;
-          border-radius: 18px;
-          padding: 16px 18px;
-          display: flex;
-          gap: 14px;
-          align-items: center;
-          text-align: left;
-          cursor: pointer;
-        }
-
-        .optionBtn:hover {
-          border-color: #f59e0b;
-          background: #fffbeb;
-        }
-
-        .optionBtn:disabled {
-          opacity: .88;
-          cursor: default;
-        }
-
-        .optionBtn.correctAnswer {
-          border-color: #22c55e;
-          background: #ecfdf5;
-        }
-
-        .optionBtn.wrongAnswer {
-          border-color: #ef4444;
-          background: #fef2f2;
-        }
-
-        .quiz.present .optionBtn {
-          min-height: 92px;
-          font-size: 1.25rem;
-          padding: 20px;
-        }
-
-        .optionKey {
-          width: 42px;
-          height: 42px;
-          border-radius: 999px;
-          background: #f3f4f6;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 900;
-          flex: 0 0 auto;
-        }
-
-        .quiz.present .optionKey {
-          width: 56px;
-          height: 56px;
-          font-size: 1.4rem;
-        }
-
-        .feedbackPanel {
-          margin-top: 18px;
-          display: flex;
-          justify-content: space-between;
-          gap: 12px;
-          align-items: center;
-          flex-wrap: wrap;
-          padding: 16px;
-          border-radius: 18px;
-          background: #f9fafb;
-        }
-
-        .results {
-          max-width: 900px;
-          margin: 34px auto;
-          text-align: center;
-          background: white;
-          border-radius: 24px;
-          padding: 28px;
-          box-shadow: 0 16px 40px rgba(0,0,0,.08);
-        }
-
-        .results h1 {
-          font-size: 4rem;
-          margin: 0;
-        }
-
-        .results h2 {
-          font-size: 2.2rem;
-          margin: 8px 0;
-        }
-
-        .results p {
-          color: #6b7280;
-        }
-
-        .actions {
-          display: flex;
-          justify-content: center;
-          gap: 12px;
-          flex-wrap: wrap;
-          margin-top: 18px;
-        }
-
-        .saveCard, .scoresCard {
-          max-width: 520px;
-          margin: 18px auto 0;
-          text-align: left;
-          background: #f9fafb;
-          border: 1px solid #e5e7eb;
-          border-radius: 18px;
-          padding: 16px;
-        }
-
-        .saveRow {
-          display: flex;
-          gap: 10px;
-          flex-wrap: wrap;
-          margin-top: 12px;
-        }
-
-        .saveInput {
-          flex: 1;
-          min-width: 220px;
-          padding: 12px 14px;
-          border-radius: 12px;
-          border: 1px solid #d1d5db;
-          background: white;
-        }
-
-        .scoreItem {
-          display: flex;
-          justify-content: space-between;
-          gap: 10px;
-          padding: 8px 0;
-          border-bottom: 1px solid #e5e7eb;
-        }
-
-        .scoreItem:last-child {
-          border-bottom: none;
-        }
-
+        .topbar { max-width: 1100px; margin: 0 auto 14px; display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+        .toolBtn, .levelBtn, .actionBtn, .nextBtn, .saveBtn { border: none; border-radius: 14px; cursor: pointer; font-weight: 700; }
+        .toolBtn { background: white; padding: 12px 16px; box-shadow: 0 6px 18px rgba(0,0,0,.08); }
+        .hero { max-width: 900px; margin: 24px auto; text-align: center; }
+        .heroCard { overflow: hidden; border-radius: 22px; box-shadow: 0 14px 34px rgba(0,0,0,.18); }
+        .heroCard img { width: 100%; display: block; }
+        .levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 22px; }
+        .levelBtn { background: white; padding: 22px; box-shadow: 0 10px 24px rgba(0,0,0,.08); }
+        .levelTitle { display: block; font-size: 1.35rem; }
+        .quiz { max-width: 1120px; margin: 18px auto; background: white; border-radius: 24px; padding: 20px; box-shadow: 0 16px 40px rgba(0,0,0,.08); }
+        .quiz.present { max-width: 1280px; padding: 28px; }
+        .metaRow { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+        .metaGroup { display: flex; gap: 10px; flex-wrap: wrap; }
+        .pill { background: #f3f4f6; border-radius: 999px; padding: 8px 12px; font-size: .95rem; font-weight: 700; }
+        .quizGrid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 22px; align-items: start; }
+        .quiz.present .quizGrid { grid-template-columns: 1fr; }
+        .questionImage { width: 100%; border-radius: 18px; display: block; background: #f3f4f6; object-fit: cover; max-height: 520px; }
+        .quiz.present .questionImage { max-height: 46vh; }
+        .questionPanel h2 { margin: 6px 0 18px; font-size: clamp(1.45rem, 2.5vw, 2.6rem); line-height: 1.15; }
+        .quiz.present .questionPanel h2 { font-size: clamp(2rem, 4vw, 3.6rem); }
+        .options { display: grid; gap: 12px; }
+        .quiz.present .options { grid-template-columns: 1fr 1fr; gap: 16px; }
+        .optionBtn { background: white; border: 2px solid #e5e7eb; border-radius: 18px; padding: 16px 18px; display: flex; gap: 14px; align-items: center; text-align: left; cursor: pointer; }
+        .optionBtn:hover { border-color: #f59e0b; background: #fffbeb; }
+        .optionBtn:disabled { opacity: .88; cursor: default; }
+        .optionBtn.correctAnswer { border-color: #22c55e; background: #ecfdf5; }
+        .optionBtn.wrongAnswer { border-color: #ef4444; background: #fef2f2; }
+        .quiz.present .optionBtn { min-height: 92px; font-size: 1.25rem; padding: 20px; }
+        .optionKey { width: 42px; height: 42px; border-radius: 999px; background: #f3f4f6; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; flex: 0 0 auto; }
+        .quiz.present .optionKey { width: 56px; height: 56px; font-size: 1.4rem; }
+        .topStatus { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 12px; align-items: end; margin: 0 0 16px; }
+        .simpleLabel { font-size: .92rem; color: #6b7280; margin-bottom: 6px; }
+        .simpleTime { font-size: 1.2rem; font-weight: 800; background: #f3f4f6; border-radius: 12px; padding: 10px 14px; min-width: 96px; text-align: center; white-space: nowrap; }
+        .simpleNextWrap { display: flex; justify-content: flex-end; align-items: end; min-width: 160px; }
+        .simpleNextPlaceholder { min-width: 160px; height: 52px; }
+        .belowRow { display: none; }
+        .muted { color: #6b7280; text-align: center; }
+        .feedbackPanel { margin-top: 18px; display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; padding: 16px; border-radius: 18px; background: #f9fafb; }
+        .nextBtn, .saveBtn, .actionBtn { background: linear-gradient(135deg, #f59e0b, #ea580c); color: white; padding: 14px 18px; }
+        .results { max-width: 900px; margin: 34px auto; text-align: center; background: white; border-radius: 24px; padding: 28px; box-shadow: 0 16px 40px rgba(0,0,0,.08); }
+        .results h1 { font-size: 4rem; margin: 0; }
+        .results h2 { font-size: 2.2rem; margin: 8px 0; }
+        .results p { color: #6b7280; }
+        .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+        .saveCard, .scoresCard, .adminCard { max-width: 520px; margin: 18px auto 0; text-align: left; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 18px; padding: 16px; }
+        .saveRow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+        .saveInput { flex: 1; min-width: 220px; padding: 12px 14px; border-radius: 12px; border: 1px solid #d1d5db; background: white; }
+        .scoreItem { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+        .scoreItem:last-child { border-bottom: none; }
         @media (max-width: 900px) {
-          .levels, .quizGrid, .quiz.present .options {
-            grid-template-columns: 1fr;
-          }
-
-          .topStatus {
-            grid-template-columns: 1fr;
-            align-items: stretch;
-          }
-
-          .questionTimeRow {
-            align-items: stretch;
-          }
-
-          .simpleNextWrap,
-          .simpleNextPlaceholder {
-            min-width: 0;
-            width: 100%;
-          }
-
-          .quiz.present .optionBtn {
-            min-height: unset;
-            font-size: 1.05rem;
-          }
+          .levels, .quizGrid, .quiz.present .options { grid-template-columns: 1fr; }
+          .topStatus { grid-template-columns: 1fr; align-items: stretch; }
+          .simpleNextWrap, .simpleNextPlaceholder { min-width: 0; width: 100%; }
+          .quiz.present .optionBtn { min-height: unset; font-size: 1.05rem; }
+          .circleTimer, .quiz.present .circleTimer { width: 140px; height: 140px; font-size: 2.2rem; }
         }
       `}</style>
 
       <div className="topbar">
-        <button className="toolBtn" onClick={() => setSoundEnabled((v) => !v)}>
-          {soundEnabled ? "🔊 Sonido" : "🔇 Silencio"}
-        </button>
-        <button className="toolBtn" onClick={() => setPresentationMode((v) => !v)}>
-          {presentationMode ? "🖥️ Modo normal" : "🎥 Modo presentación"}
-        </button>
+        <button className="toolBtn" onClick={() => setSoundEnabled((v) => !v)}>{soundEnabled ? "🔊 Sonido" : "🔇 Silencio"}</button>
+        <button className="toolBtn" onClick={() => setPresentationMode((v) => !v)}>{presentationMode ? "🖥️ Modo normal" : "🎥 Modo presentación"}</button>
       </div>
 
       {screen === "home" && (
@@ -693,7 +394,6 @@ export default function App() {
           <div className="heroCard">
             <img src="/images/portada.png" alt="Portada Semana Santa" />
           </div>
-
           <div className="levels">
             {Object.entries(LEVEL_LABELS).map(([key, label]) => (
               <button key={key} className="levelBtn" onClick={() => startGame(key)}>
@@ -709,6 +409,7 @@ export default function App() {
           <div className="metaRow">
             <div className="metaGroup">
               <span className="pill">Nivel {LEVEL_LABELS[level]}</span>
+              <span className="pill">Pregunta {current + 1} / {questions.length}</span>
             </div>
             <div className="metaGroup">
               <span className="pill">Puntuación {score}</span>
@@ -716,26 +417,19 @@ export default function App() {
           </div>
 
           <div className="topStatus">
-            <div className="questionTimeBlock">
-              <div className="questionTimeRow">
-                <span className="questionCount">
-                  Pregunta {current + 1} / {questions.length}
-                </span>
-                <div className="timeBarTrack">
-                  <div className="timeBarFill" style={{ width: timerWidth }} />
-                </div>
-              </div>
-
+            <div>
+              <div className="simpleLabel">Progreso</div>
               <div className="progressBar">
                 <div className="progressFill" style={{ width: `${progress}%` }} />
               </div>
             </div>
-
+            <div>
+              <div className="simpleLabel">Tiempo</div>
+              <div className="simpleTime">⏱ {timeLeft}s</div>
+            </div>
             <div className="simpleNextWrap">
               {locked ? (
-                <button className="nextBtn" onClick={nextQuestion}>
-                  {current + 1 >= questions.length ? "Ver resultado" : "Siguiente"}
-                </button>
+                <button className="nextBtn" onClick={nextQuestion}>{current + 1 >= questions.length ? "Ver resultado" : "Siguiente"}</button>
               ) : (
                 <div className="simpleNextPlaceholder" />
               )}
@@ -746,23 +440,15 @@ export default function App() {
             <div>
               <img className="questionImage" src={q.image} alt={q.text} />
             </div>
-
             <div className="questionPanel">
               <h2>{q.text}</h2>
-
               <div className="options">
                 {q.options.map((option, index) => {
                   const isCorrectOption = locked && index === q.correctAnswer;
                   const isWrongSelected = locked && selected === index && index !== q.correctAnswer;
                   const className = `optionBtn${isCorrectOption ? " correctAnswer" : ""}${isWrongSelected ? " wrongAnswer" : ""}`;
-
                   return (
-                    <button
-                      key={index}
-                      className={className}
-                      onClick={() => answer(index)}
-                      disabled={locked}
-                    >
+                    <button key={index} className={className} onClick={() => answer(index)} disabled={locked}>
                       <span className="optionKey">{String.fromCharCode(65 + index)}</span>
                       <span>{option}</span>
                     </button>
@@ -790,37 +476,42 @@ export default function App() {
         <div className="results">
           <h1>{medal}</h1>
           <h2>{score}/10</h2>
-          <p>
-            {score >= 9
-              ? "¡Excelente!"
-              : score >= 7
-                ? "Muy buen resultado"
-                : score >= 5
-                  ? "Buen trabajo"
-                  : "Puedes volver a intentarlo"}
-          </p>
+          <p>{score >= 9 ? "¡Excelente!" : score >= 7 ? "Muy buen resultado" : score >= 5 ? "Buen trabajo" : "Puedes volver a intentarlo"}</p>
 
           {showSavePanel && (
             <div className="saveCard">
               <div style={{ fontWeight: 800 }}>Guardar puntuación</div>
-              <div style={{ color: "#6b7280", marginTop: 6 }}>
-                Escribe el nombre del jugador para guardar los puntos.
-              </div>
+              <div style={{ color: "#6b7280", marginTop: 6 }}>Escribe el nombre del jugador para guardar los puntos en Firebase.</div>
               <div className="saveRow">
-                <input
-                  className="saveInput"
-                  value={playerName}
-                  onChange={(e) => setPlayerName(e.target.value)}
-                  placeholder="Nombre del jugador"
-                />
-                <button className="saveBtn" onClick={saveScore} disabled={savingScore}>
-                  {savingScore ? "Guardando..." : "Guardar"}
-                </button>
+                <input className="saveInput" value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Nombre del jugador" />
+                <button className="saveBtn" onClick={saveScore} disabled={savingScore}>{savingScore ? "Guardando..." : "Guardar"}</button>
               </div>
             </div>
           )}
 
           {saveMessage && <p>{saveMessage}</p>}
+
+          <div className="adminCard">
+            <div style={{ fontWeight: 800, marginBottom: 10 }}>Administración</div>
+            {!adminMode ? (
+              <>
+                <div style={{ color: "#6b7280", marginBottom: 10 }}>Introduce la contraseña de administrador para borrar registros.</div>
+                <div className="saveRow">
+                  <input
+                    className="saveInput"
+                    type="password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="Contraseña de administrador"
+                  />
+                  <button className="saveBtn" onClick={enableAdminMode}>Entrar</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ color: "#166534" }}>Modo administrador activado. Ya puedes borrar registros.</div>
+            )}
+            {adminMessage && <div style={{ marginTop: 10, color: adminMode ? "#166534" : "#b91c1c" }}>{adminMessage}</div>}
+          </div>
 
           <div className="scoresCard">
             <div style={{ fontWeight: 800, marginBottom: 10 }}>Últimas puntuaciones</div>
@@ -832,19 +523,34 @@ export default function App() {
                   <span>
                     <strong>{entry.name}</strong> · {entry.difficulty || LEVEL_LABELS[entry.level] || entry.level}
                   </span>
-                  <span>{entry.score}/10</span>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span>{entry.score}/10</span>
+                    {adminMode && (
+                      <button
+                        onClick={() => deleteScore(entry.id)}
+                        disabled={deletingId === entry.id}
+                        style={{
+                          border: "none",
+                          background: "#dc2626",
+                          color: "white",
+                          borderRadius: 10,
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {deletingId === entry.id ? "Borrando..." : "Borrar"}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))
             )}
           </div>
 
           <div className="actions">
-            <button className="actionBtn" onClick={() => startGame(level)}>
-              Jugar otra vez
-            </button>
-            <button className="actionBtn" onClick={() => setScreen("home")}>
-              Cambiar nivel
-            </button>
+            <button className="actionBtn" onClick={() => startGame(level)}>Jugar otra vez</button>
+            <button className="actionBtn" onClick={() => setScreen("home")}>Cambiar nivel</button>
           </div>
         </div>
       )}
